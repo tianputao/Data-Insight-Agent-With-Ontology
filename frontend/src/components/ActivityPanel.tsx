@@ -97,7 +97,16 @@ const groupAgentActivities = (activities: ActivityItem[]): DisplayActivity[] => 
 };
 
 const StateDot: React.FC<{ state: ActivityItem['state'] }> = ({ state }) => (
-  <span className="thinking-state" aria-label={state}></span>
+  <>
+    <span className="thinking-state" aria-hidden="true"></span>
+    <span className="sr-only">{state}</span>
+    {state === 'error' && (
+      <span className="activity-error-label">
+        <span className="error-icon" aria-hidden="true">!</span>
+        <span>Error</span>
+      </span>
+    )}
+  </>
 );
 
 const Narration: React.FC<{ activity: ActivityItem }> = ({ activity }) => (

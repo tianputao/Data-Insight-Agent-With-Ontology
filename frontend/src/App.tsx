@@ -23,9 +23,14 @@ const EXAMPLE_QUERIES = [
 interface MessageWithThinking extends ChatMessage {
   thinking?: ActivityItem[];
   thinkingCollapsed?: boolean;
+  error?: boolean;
 }
 
+type Theme = 'dark' | 'light';
+type BusinessLayerStatusTone = 'neutral' | 'error';
+
 const EMPTY_MESSAGES: MessageWithThinking[] = [];
+const THEME_STORAGE_KEY = 'ontology-data-agent-theme';
 
 const tableRowCells = (row: string): string[] | null => {
   const stripped = row.trim();
@@ -104,14 +109,14 @@ const OntologyMark: React.FC = () => (
   <svg viewBox="0 0 120 120" role="img" aria-label="Ontology Data Agent" focusable="false">
     <defs>
       <linearGradient id="onto-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#4a9eff" />
-        <stop offset="55%" stopColor="#06b6d4" />
-        <stop offset="100%" stopColor="#a855f7" />
+        <stop offset="0%" stopColor="var(--accent-blue)" />
+        <stop offset="55%" stopColor="var(--accent-cyan)" />
+        <stop offset="100%" stopColor="var(--accent-purple)" />
       </linearGradient>
       <radialGradient id="onto-core" cx="35%" cy="30%" r="80%">
-        <stop offset="0%" stopColor="#cfe9ff" />
-        <stop offset="45%" stopColor="#4a9eff" />
-        <stop offset="100%" stopColor="#a855f7" />
+        <stop offset="0%" stopColor="var(--logo-core-highlight)" />
+        <stop offset="45%" stopColor="var(--accent-blue)" />
+        <stop offset="100%" stopColor="var(--accent-purple)" />
       </radialGradient>
       <filter id="onto-glow" x="-60%" y="-60%" width="220%" height="220%">
         <feGaussianBlur stdDeviation="3.4" result="blur" />
@@ -173,7 +178,7 @@ const OntologyMark: React.FC = () => (
     <circle cx="60" cy="60" r="15" fill="url(#onto-core)" filter="url(#onto-glow)" />
 
     {/* data grain inside the hub */}
-    <g fill="#0b1220" opacity="0.75">
+    <g fill="var(--logo-core-detail)" opacity="0.75">
       <rect x="54.5" y="61" width="3" height="7" rx="1.4" />
       <rect x="58.5" y="56" width="3" height="12" rx="1.4" />
       <rect x="62.5" y="58.5" width="3" height="9.5" rx="1.4" />
@@ -187,6 +192,9 @@ const OntologyMark: React.FC = () => (
 );
 
 function App() {
+  const [theme, setTheme] = useState<Theme>(
+    document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
@@ -200,6 +208,8 @@ function App() {
   const [businessLayerOpen, setBusinessLayerOpen] = useState(false);
   const [businessLayerDraft, setBusinessLayerDraft] = useState('');
   const [businessLayerStatus, setBusinessLayerStatus] = useState('');
+  const [businessLayerStatusTone, setBusinessLayerStatusTone] =
+    useState<BusinessLayerStatusTone>('neutral');
   const [businessLayerBusy, setBusinessLayerBusy] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
@@ -226,12 +236,15 @@ function App() {
     setBusinessLayerOpen(true);
     setBusinessLayerBusy(true);
     setBusinessLayerStatus('Loading…');
+    setBusinessLayerStatusTone('neutral');
     try {
       const { content } = await apiService.getBusinessLayer();
       setBusinessLayerDraft(content);
       setBusinessLayerStatus('');
-    } catch {
+    } catch (error) {
+      console.error('Failed to load the business layer document:', error);
       setBusinessLayerStatus('Could not load the document.');
+      setBusinessLayerStatusTone('error');
     } finally {
       setBusinessLayerBusy(false);
     }
@@ -240,11 +253,14 @@ function App() {
   const persistBusinessLayer = async () => {
     setBusinessLayerBusy(true);
     setBusinessLayerStatus('Saving…');
+    setBusinessLayerStatusTone('neutral');
     try {
       const { length } = await apiService.saveBusinessLayer(businessLayerDraft);
       setBusinessLayerStatus(`Saved (${length} characters). It applies from your next question.`);
-    } catch {
+    } catch (error) {
+      console.error('Failed to save the business layer document:', error);
       setBusinessLayerStatus('Save failed.');
+      setBusinessLayerStatusTone('error');
     } finally {
       setBusinessLayerBusy(false);
     }
@@ -659,8 +675,11 @@ function App() {
           if (wasAborted) {
             lastMsg.content = lastMsg.content || '任务已停止。';
             lastMsg.thinkingCollapsed = true;
-          } else if (lastMsg.content === '') {
-            lastMsg.content = `请求失败：${errMsg}`;
+          } else {
+            lastMsg.error = true;
+            if (lastMsg.content === '') {
+              lastMsg.content = `请求失败：${errMsg}`;
+            }
           }
         }
         return newMessages;
@@ -695,6 +714,17 @@ function App() {
   const setCurrentSessionOntology = (enabled: boolean) => {
     if (!currentSessionId) return;
     setSessionOntologyModes(previous => new Map(previous).set(currentSessionId, enabled));
+  };
+
+  const toggleTheme = () => {
+    const nextTheme: Theme = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = nextTheme;
+    setTheme(nextTheme);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    } catch (error) {
+      console.error('Failed to persist the theme preference:', error);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -840,6 +870,16 @@ function App() {
             >
               📘 Business Layer Doc
             </button>
+            <button
+              className="icon-btn theme-toggle"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+            >
+              <span className="theme-icon" aria-hidden="true">
+                {theme === 'dark' ? '☀' : '☾'}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -888,7 +928,13 @@ function App() {
                           )}
                           
                           {/* Assistant response */}
-                          <div className="message assistant">
+                          <div className={`message assistant ${msg.error ? 'error' : ''}`}>
+                            {msg.error && (
+                              <div className="message-error-label" role="alert">
+                                <span className="error-icon" aria-hidden="true">!</span>
+                                <span>Error</span>
+                              </div>
+                            )}
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
                               urlTransform={(url) => url}
@@ -980,7 +1026,18 @@ function App() {
               placeholder={'# Terminology\n- VIP customer = a customer whose yearly spend exceeds the agreed threshold\n\n# Metric definitions\n- Revenue = sum of order totals'}
             />
             <div className="business-layer-footer">
-              <span className="business-layer-status">{businessLayerStatus}</span>
+              <span
+                className={`business-layer-status ${businessLayerStatusTone}`}
+                role={businessLayerStatusTone === 'error' ? 'alert' : 'status'}
+              >
+                {businessLayerStatusTone === 'error' && (
+                  <span className="business-layer-error-label">
+                    <span className="error-icon" aria-hidden="true">!</span>
+                    <span>Error:</span>
+                  </span>
+                )}
+                {businessLayerStatus}
+              </span>
               <button className="icon-btn" onClick={persistBusinessLayer} disabled={businessLayerBusy}>
                 Save
               </button>

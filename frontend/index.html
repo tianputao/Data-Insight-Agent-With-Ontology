@@ -5,6 +5,18 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ontology Data Agent</title>
+    <script>
+      (() => {
+        const root = document.documentElement;
+        try {
+          const storedTheme = window.localStorage.getItem('ontology-data-agent-theme');
+          root.dataset.theme = storedTheme === 'light' ? 'light' : 'dark';
+        } catch (error) {
+          root.dataset.theme = 'dark';
+          console.warn('Unable to read the theme preference; using the dark theme.', error);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
